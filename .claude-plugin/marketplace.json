@@ -15,10 +15,7 @@
   "plugins": [
     {
       "name": "armorcopilot",
-      "source": {
-        "source": "local",
-        "path": "./plugins/armorcopilot"
-      },
+      "source": "./plugins/armorcopilot",
       "description": "Intent-based security enforcement for GitHub Copilot CLI: declared plans, policy rules, intent-drift blocking, optional CSRG cryptographic proofs, and audit logging.",
       "version": "0.1.0",
       "category": "Security",

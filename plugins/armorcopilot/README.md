@@ -51,9 +51,12 @@ The MCP server `armorcopilot-policy` exposes three tools:
 
 ```bash
 git clone https://github.com/armoriq/armorCopilot
-cd armorCopilot/packages/armorcopilot-gh
+cd armorCopilot/plugins/armorcopilot
 npm install --omit=dev
-copilot plugin install .
+
+# Then from the repo root, register the marketplace + install:
+copilot plugin marketplace add /path/to/armorCopilot
+copilot plugin install armorcopilot@armorcopilot
 ```
 
 ## Refs

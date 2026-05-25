@@ -50,7 +50,41 @@ async function main() {
     }
     return;
   }
-  const event = typeof input.hook_event_name === "string" ? input.hook_event_name : "";
+  // Normalize GitHub Copilot CLI's camelCase payload to the snake_case shape
+  // the engine expects (matches Claude Code's hook payload format). Copilot
+  // also doesn't include hook_event_name — it comes from COPILOT_HOOK_EVENT
+  // set in hooks.json per event.
+  if (typeof input.sessionId === "string" && !input.session_id) {
+    input.session_id = input.sessionId;
+  }
+  if (typeof input.toolName === "string" && !input.tool_name) {
+    input.tool_name = input.toolName;
+  }
+  if (input.toolArgs !== undefined && input.tool_input === undefined) {
+    // Copilot serializes tool args as a JSON STRING; parse to object.
+    if (typeof input.toolArgs === "string") {
+      try {
+        input.tool_input = JSON.parse(input.toolArgs);
+      } catch {
+        input.tool_input = input.toolArgs;
+      }
+    } else {
+      input.tool_input = input.toolArgs;
+    }
+  }
+  if (typeof input.toolResult !== "undefined" && typeof input.tool_response === "undefined") {
+    input.tool_response = input.toolResult;
+  }
+  if (typeof input.initialPrompt === "string" && !input.prompt) {
+    input.prompt = input.initialPrompt;
+  }
+  const event =
+    (typeof input.hook_event_name === "string" && input.hook_event_name) ||
+    process.env.COPILOT_HOOK_EVENT ||
+    "";
+  if (event && !input.hook_event_name) {
+    input.hook_event_name = event;
+  }
   currentEvent = event;
   debugLog(config, `hook=${event}`);
 
