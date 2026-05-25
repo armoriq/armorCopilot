@@ -1,0 +1,38 @@
+{
+  "name": "armorcopilot",
+  "owner": {
+    "name": "ArmorIQ",
+    "email": "license@armoriq.io",
+    "url": "https://armoriq.ai"
+  },
+  "metadata": {
+    "description": "ArmorIQ marketplace: intent-based security enforcement for GitHub Copilot CLI (ArmorCopilot) and other agentic harnesses.",
+    "version": "0.1.0"
+  },
+  "interface": {
+    "displayName": "ArmorIQ"
+  },
+  "plugins": [
+    {
+      "name": "armorcopilot",
+      "source": {
+        "source": "local",
+        "path": "./plugins/armorcopilot"
+      },
+      "description": "Intent-based security enforcement for GitHub Copilot CLI: declared plans, policy rules, intent-drift blocking, optional CSRG cryptographic proofs, and audit logging.",
+      "version": "0.1.0",
+      "category": "Security",
+      "tags": ["security", "policy", "audit", "intent", "armoriq", "mcp", "hooks", "github-copilot"],
+      "homepage": "https://armoriq.ai",
+      "license": "MIT",
+      "author": {
+        "name": "ArmorIQ",
+        "email": "license@armoriq.io"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      }
+    }
+  ]
+}
