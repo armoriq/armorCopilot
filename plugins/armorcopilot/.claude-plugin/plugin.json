@@ -1,0 +1,76 @@
+{
+  "name": "armorcopilot",
+  "version": "0.1.0",
+  "description": "ArmorIQ intent-based security enforcement for GitHub Copilot CLI: pre-tool guardrails with intent verification, optional CSRG cryptographic proofs, and audit logging. Treat as a strong shell guardrail and audit layer — hooks fire on preToolUse / postToolUse / sessionStart / userPromptSubmitted via the official Copilot CLI plugin runtime.",
+  "author": {
+    "name": "ArmorIQ",
+    "email": "license@armoriq.io",
+    "url": "https://armoriq.ai"
+  },
+  "homepage": "https://armoriq.ai",
+  "repository": "https://github.com/armoriq/armorCopilot",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "policy",
+    "audit",
+    "intent",
+    "armoriq",
+    "mcp",
+    "hooks",
+    "github-copilot"
+  ],
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "ArmorCopilot",
+    "shortDescription": "Intent-based security policy and audit for GitHub Copilot CLI.",
+    "longDescription": "ArmorIQ intent-based security enforcement for GitHub Copilot CLI. Hooks into preToolUse / postToolUse / sessionStart / userPromptSubmitted events. Provides plan registration through MCP, intent-plan matching, permission gating, and synchronous audit on every tool invocation. Block tools by name, by argument pattern, or by intent drift — all configured from natural language via the policy_update MCP tool.",
+    "developerName": "ArmorIQ",
+    "category": "Security",
+    "capabilities": ["MCP", "Hooks"],
+    "websiteURL": "https://armoriq.ai",
+    "privacyPolicyURL": "https://armoriq.ai/privacy-policy",
+    "termsOfServiceURL": "https://armoriq.ai/terms-of-service",
+    "brandColor": "#00E5CC",
+    "composerIcon": "./assets/armoriq-logo.png",
+    "logo": "./assets/armoriq-logo.png",
+    "defaultPrompt": [
+      "Show me what security rules are protecting this project.",
+      "Block any commands that fetch URLs or exfiltrate data.",
+      "Walk me through your plan before running anything."
+    ]
+  },
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "ArmorIQ API Key",
+      "description": "Your ArmorIQ API key (get one at https://armoriq.ai). Leave blank to run in local-only mode without backend audit/intent.",
+      "sensitive": true
+    },
+    "mode": {
+      "type": "string",
+      "title": "Enforcement Mode",
+      "description": "enforce = block on policy/intent failures (recommended). monitor = log only, never block.",
+      "sensitive": false
+    },
+    "intent_required": {
+      "type": "boolean",
+      "title": "Require Intent Plan",
+      "description": "When true, every tool invocation must be backed by a registered intent plan. Disable for advisory-only use.",
+      "sensitive": false
+    },
+    "crypto_policy_enabled": {
+      "type": "boolean",
+      "title": "Enable Crypto Policy Binding",
+      "description": "Bind policy rules to a Merkle tree so post-issuance tampering is detected.",
+      "sensitive": false
+    },
+    "use_production": {
+      "type": "boolean",
+      "title": "Use Production Endpoints",
+      "description": "When true, talks to ArmorIQ production. When false, expects a local backend on 127.0.0.1.",
+      "sensitive": false
+    }
+  }
+}
