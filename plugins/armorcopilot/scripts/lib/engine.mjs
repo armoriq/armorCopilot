@@ -261,6 +261,10 @@ export async function handlePreToolUse(input, config) {
   //     no side effects on user files or systems. Blocking these makes the
   //     agent fight itself (e.g. ToolSearch is needed to fetch deferred MCP
   //     tool schemas before they can be called). ---
+  // Read-only / coordination tools that bypass full enforcement to keep the
+  // hot path fast. Strictly local-only — anything that performs network
+  // egress (websearch, webfetch) MUST go through policy + intent enforcement
+  // and cannot be on this list.
   const safeInternalTools = new Set([
     "toolsearch",
     "todowrite",
@@ -268,9 +272,7 @@ export async function handlePreToolUse(input, config) {
     "readmcpresourcetool",
     "read",
     "grep",
-    "glob",
-    "websearch",
-    "webfetch"
+    "glob"
   ]);
   if (safeInternalTools.has(norm)) {
     return null;

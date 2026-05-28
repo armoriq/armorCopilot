@@ -79,9 +79,14 @@ export function createIapService(config) {
       }
 
       const response = await postJson(endpoint, payload, headers, timeoutMs);
-      if (!response.ok && !isPlainObject(response.data)) {
+      // Fail-closed on non-2xx: a JSON body with a partial payload must not
+      // silently allow downstream code to treat `data.allowed` as true by
+      // default. The only acceptable success signal is response.ok.
+      if (!response.ok) {
         throw new Error(
-          response.text || `IAP verify-step failed with status ${response.status}`
+          (isPlainObject(response.data) && response.data.message) ||
+            response.text ||
+            `IAP verify-step failed with status ${response.status}`
         );
       }
 

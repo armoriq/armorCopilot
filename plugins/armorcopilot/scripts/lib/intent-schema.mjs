@@ -27,7 +27,13 @@ export const INTENT_PLAN_ZOD = z.object({
   steps: z
     .array(PLAN_STEP_SCHEMA)
     .min(1)
-    .describe("Ordered list of tool calls the agent intends to make")
+    .describe("Ordered list of tool calls the agent intends to make"),
+  session_id: z
+    .string()
+    .optional()
+    .describe(
+      "Optional — pass the current Copilot session_id so the pending plan is scoped per-session and concurrent sessions don't clobber each other. If omitted, falls back to a shared global pending-plan.json file."
+    )
 });
 
 /**

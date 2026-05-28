@@ -40,6 +40,30 @@
         "env": { "COPILOT_HOOK_EVENT": "PostToolUse" },
         "timeoutSec": 30
       }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "command",
+        "bash": "node \"$CLAUDE_PLUGIN_ROOT/scripts/bootstrap.mjs\" router",
+        "env": { "COPILOT_HOOK_EVENT": "PostToolUseFailure" },
+        "timeoutSec": 30
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "node \"$CLAUDE_PLUGIN_ROOT/scripts/bootstrap.mjs\" router",
+        "env": { "COPILOT_HOOK_EVENT": "Stop" },
+        "timeoutSec": 30
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "node \"$CLAUDE_PLUGIN_ROOT/scripts/bootstrap.mjs\" router",
+        "env": { "COPILOT_HOOK_EVENT": "SessionEnd" },
+        "timeoutSec": 30
+      }
     ]
   }
 }

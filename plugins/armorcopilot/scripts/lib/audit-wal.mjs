@@ -110,6 +110,11 @@ export function createAuditWal(opts) {
    * Skips malformed lines (logs to stderr) so a single bad row can't
    * permanently block the stream.
    */
+  // Cap each read to bound memory if the backend is down + the WAL grows large.
+  // 4 MiB is enough to comfortably parse `maxRows=100` audit rows (~40KB each
+  // worst case) while preventing OOM if a partial-line tail keeps growing.
+  const MAX_READ_BYTES = 4 * 1024 * 1024;
+
   async function readBatch(maxRows = 100) {
     await ensureDirs();
     if (!existsSync(currentPath)) return { rows: [], endOffset: 0 };
@@ -119,7 +124,7 @@ export function createAuditWal(opts) {
     try {
       const st = await fh.stat();
       if (offset >= st.size) return { rows: [], endOffset: offset };
-      const length = st.size - offset;
+      const length = Math.min(st.size - offset, MAX_READ_BYTES);
       const buf = Buffer.alloc(length);
       await fh.read(buf, 0, length, offset);
 

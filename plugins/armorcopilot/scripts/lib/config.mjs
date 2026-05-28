@@ -39,29 +39,37 @@ export function loadConfig(env = process.env) {
 
   const timeoutMs = parseInteger(env.ARMORCOPILOT_TIMEOUT_MS, 8000);
 
-  // dev branch — points at staging-api for pre-release testing.
-  // main branch keeps "https://api.armoriq.ai" (prod). When promoting a
-  // feature from dev → main, resolve the URL conflict in favor of main.
+  // 3-way endpoint resolution by envMode (production / staging / local).
+  // Env var overrides always win; otherwise pick by envMode.
+  // Previously this was a 2-way ternary that confusingly mapped useProduction
+  // → staging-api. Reviewers flagged the inversion — fixed by switching on
+  // envMode explicitly.
   const backendEndpoint =
     env.ARMORCOPILOT_BACKEND_ENDPOINT?.trim() ||
     env.BACKEND_ENDPOINT?.trim() ||
-    (useProduction
-      ? "https://staging-api.armoriq.ai"
-      : "http://127.0.0.1:3000");
+    (envMode === "production"
+      ? "https://api.armoriq.ai"
+      : envMode === "staging"
+        ? "https://staging-api.armoriq.ai"
+        : "http://127.0.0.1:3000");
 
   const iapEndpoint =
     env.ARMORCOPILOT_IAP_ENDPOINT?.trim() ||
     env.IAP_ENDPOINT?.trim() ||
-    (useProduction
+    (envMode === "production"
       ? "https://iap.armoriq.ai"
-      : "http://127.0.0.1:8000");
+      : envMode === "staging"
+        ? "https://iap-staging.armoriq.ai"
+        : "http://127.0.0.1:8000");
 
   const proxyEndpoint =
     env.ARMORCOPILOT_PROXY_ENDPOINT?.trim() ||
     env.PROXY_ENDPOINT?.trim() ||
-    (useProduction
-      ? "https://cloud-run-proxy.armoriq.io"
-      : "http://127.0.0.1:3001");
+    (envMode === "production"
+      ? "https://proxy.armoriq.ai"
+      : envMode === "staging"
+        ? "https://cloud-run-proxy.armoriq.io"
+        : "http://127.0.0.1:3001");
 
   const csrgEndpoint =
     pluginOpt(env, "CSRG_ENDPOINT", "CSRG_URL") || iapEndpoint;

@@ -9,15 +9,24 @@ Intent-based security policy + audit for GitHub Copilot CLI. Ports the same enfo
 - Verifies every tool call against the registered plan — out-of-plan tools are blocked even if policy would allow them
 - Lets you set policies in natural language ("Block any commands that fetch URLs") via the `policy_update` MCP tool
 - Optional CSRG cryptographic proofs for tamper detection
-- Synchronous audit log to ArmorIQ backend
+- Async batched audit pipeline: each tool call is enqueued to a local write-ahead log (durable on disk), then shipped in batches to the ArmorIQ backend by a background flusher inside the MCP server. Durable enqueue, async ship.
 
 ## Install
 
+The plugin manifest lives at `plugins/armorcopilot/.claude-plugin/plugin.json` inside the repo. Install via the marketplace flow:
+
 ```bash
-copilot plugin install armoriq/armorCopilot
+copilot plugin marketplace add armoriq/armorCopilot
+copilot plugin install armorcopilot@armorcopilot
 ```
 
-The plugin runtime auto-discovers `.claude-plugin/plugin.json` and registers hooks + MCP servers.
+The repo's root `.claude-plugin/marketplace.json` declares the plugin source so the marketplace install resolves to the right subdirectory automatically.
+
+Or use the curl-pipe installer that handles the full wiring (plugin + npm deps + `armoriq-dev` CLI + device-code login):
+
+```bash
+curl -fsSL https://armoriq.ai/install_armorcopilot.sh | bash
+```
 
 ## Configure
 

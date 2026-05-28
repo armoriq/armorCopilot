@@ -208,24 +208,43 @@ async function run() {
       const config = loadConfig();
       const plan = normalizeIntentPlan(parsed.data);
 
-      // Write the local plan to pending-plan.json IMMEDIATELY so PreToolUse
-      // has something to enforce against. The SDK call (if any) runs entirely
-      // in the background and updates pending-plan.json with the signed
-      // token when it resolves.
+      // Write the local plan to pending-plan.<session_id>.json IMMEDIATELY
+      // (or pending-plan.json as a legacy fallback) so PreToolUse has
+      // something to enforce against. The SDK call (if any) runs entirely
+      // in the background and updates the same file with the signed token
+      // when it resolves.
+      //
+      // Why per-session: concurrent Copilot sessions would otherwise share
+      // a single pending-plan.json and clobber each other's plans/tokens.
+      // PreToolUse in engine.mjs already prefers the session-scoped path
+      // and falls back to global, so we mirror writes to both paths for
+      // both pre- and post-fix installs.
       //
       // Why fire-and-forget: Copilot's MCP transport closes its stdio pipe
       // around the ~1s mark. Any await we do here (loadPolicyState, the
       // SDK round-trip, even cold-start latency) eats into that budget.
       // Awaiting nothing on the network path keeps the MCP response under
       // ~100ms regardless of backend conditions.
-      const pendingPath = path.join(config.dataDir, "pending-plan.json");
-      await writeJson(pendingPath, {
+      const sessionId = typeof parsed.data.session_id === "string"
+        ? parsed.data.session_id
+        : "";
+      const globalPath = path.join(config.dataDir, "pending-plan.json");
+      const sessionPath = sessionId
+        ? path.join(config.dataDir, `pending-plan.${sessionId}.json`)
+        : null;
+      const pendingPath = sessionPath || globalPath;
+      const pendingPayload = {
         plan,
         tokenRaw: "",
         allowedActions: Array.from(extractAllowedActions(plan)),
         expiresAt: undefined,
         registeredAt: Date.now()
-      });
+      };
+      await writeJson(pendingPath, pendingPayload);
+      if (sessionPath) {
+        // Mirror to the legacy global path so older readers still work.
+        await writeJson(globalPath, pendingPayload);
+      }
 
       let backendWillIssue = false;
       if (config.intentEndpoint || (config.useSdkIntent && config.apiKey)) {
