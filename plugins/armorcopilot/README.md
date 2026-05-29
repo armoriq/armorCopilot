@@ -40,6 +40,46 @@ After install, in any `copilot` session:
 - "Block any commands that fetch URLs or exfiltrate data."
 - "Walk me through your plan before running anything."
 
+## Writing effective policies — block outcomes, not just tools
+
+Denying a single tool blocks that tool, but Copilot's planner can often achieve the same outcome with a different tool. Real example:
+
+```
+> Policy new: deny webfetch
+✔ Policy updated. Version 1.
+
+> fetch https://example.com
+● Fetch via curl (shell) — web_fetch is denied by policy
+  curl -sS https://example.com → <!doctype html>...
+```
+
+`web_fetch` stayed blocked (good). Copilot switched to `shell` + `curl` to fetch the URL anyway (bad, if your goal was "no network egress"). Fix: write broader rules.
+
+### Recommended starter policy
+
+```
+> Policy new: deny webfetch
+> Policy new: deny websearch
+> Policy new: deny shell when args contain "curl|wget|nc "
+> Policy new: deny shell when args contain "http://|https://"
+> Policy new: deny shell when args contain "rm -rf /"
+> Policy new: deny * for payment data
+```
+
+Six rules cover: network egress via dedicated tools, network egress via shell, destructive deletes, PCI exfiltration.
+
+### Patterns at a glance
+
+| Block | Rule |
+|---|---|
+| Network egress (any tool) | Deny webfetch + websearch + shell-with-curl + shell-with-URL |
+| Writes outside `/tmp` | `Policy new: deny write when path not starts with "/tmp"` |
+| Email exfiltration via shell | `Policy new: deny shell when args contain "@" and contain "."` |
+| Payment data (auto-detected) | `Policy new: deny * for payment data` |
+| Specific subprocess (e.g. ssh) | `Policy new: deny shell when args contain "ssh "` |
+
+Full guide with more patterns + data classification + storage paths: https://docs.armoriq.ai/armorcopilot/getting-started/policies
+
 ## Architecture
 
 ```
