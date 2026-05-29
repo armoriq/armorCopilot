@@ -353,6 +353,14 @@ finale() {
 
 EOF
 
+  section "Learn more"
+  cat <<EOF
+
+  Docs:         ${C}${B}https://docs.armoriq.ai/armorcopilot${N}
+  Source:       ${C}https://github.com/armoriq/armorCopilot${N}
+
+EOF
+
   section "Manage anytime"
   cat <<EOF
 
@@ -360,7 +368,6 @@ EOF
 
   Plugin:       ${C}${PLUGIN_PATH}${N}
   Copilot list: ${G}copilot plugin list${N}
-  Docs:         ${C}https://github.com/armoriq/armorCopilot${N}
 
 EOF
 }
