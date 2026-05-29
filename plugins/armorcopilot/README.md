@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/armoriq/armorCopilot/main/plugins/armorcopilot/assets/armoriq-logo.png" alt="ArmorIQ" width="220">
+</p>
+
 # ArmorCopilot for GitHub Copilot CLI
 
-Intent-based security policy + audit for GitHub Copilot CLI. Ports the same enforcement model that powers ArmorClaude and ArmorCodex to the GitHub Copilot CLI plugin runtime.
+Intent-based security policy and audit for the GitHub Copilot CLI plugin runtime.
 
 ## What it does
 
@@ -30,7 +34,7 @@ curl -fsSL https://armoriq.ai/install_armorcopilot.sh | bash
 
 ## Configure
 
-Open the plugin's userConfig in Copilot CLI and paste your ArmorIQ API key. Get one at https://armoriq.ai. Leave blank to run in local-only mode (no backend audit, policies stored on disk).
+Open the plugin's userConfig in Copilot CLI and paste your ArmorIQ API key. Get one at https://armoriq.ai.
 
 ## Try in chat
 
@@ -110,7 +114,7 @@ copilot plugin install armorcopilot@armorcopilot
 
 ## Refs
 
-- ArmorClaude (same model for Claude Code): https://github.com/armoriq/armorClaude
-- ArmorCodex (same model for OpenAI Codex): https://github.com/armoriq/armorCodex
+- ArmorCopilot docs: https://docs.armoriq.ai/armorcopilot
+- ArmorIQ platform: https://armoriq.ai
 - GitHub Copilot CLI plugin docs: https://docs.github.com/copilot/concepts/agents/copilot-cli/about-cli-plugins
 - GitHub Copilot CLI hooks reference: https://docs.github.com/en/copilot/reference/hooks-configuration

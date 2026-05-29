@@ -1,8 +1,10 @@
+<p align="center">
+  <img src="plugins/armorcopilot/assets/armoriq-logo.png" alt="ArmorIQ" width="220">
+</p>
+
 # armorCopilot
 
-ArmorIQ intent-based security enforcement for **GitHub Copilot CLI** — pre-tool guardrails, intent verification, optional cryptographic proofs, audit logging.
-
-Counterpart of ArmorClaude (Claude Code) and ArmorCodex (OpenAI Codex). Same wedge, different harness.
+ArmorIQ intent-based security enforcement for **GitHub Copilot CLI**. Pre-tool guardrails, intent verification, optional cryptographic proofs, audit logging.
 
 ## Install
 
@@ -14,7 +16,7 @@ The plugin runtime auto-discovers `.claude-plugin/plugin.json` inside `plugins/a
 
 ## Configure
 
-After install, paste your ArmorIQ API key into the plugin's userConfig in Copilot CLI. Get one at https://armoriq.ai. Leave blank for local-only mode (no backend audit, policies stored on disk).
+After install, paste your ArmorIQ API key into the plugin's userConfig in Copilot CLI. Get one at https://armoriq.ai.
 
 ## What it does
 
@@ -45,8 +47,7 @@ armorCopilot/
 
 ## Refs
 
-- ArmorClaude: https://github.com/armoriq/armorClaude
-- ArmorCodex: https://github.com/armoriq/armorCodex
+- ArmorCopilot docs: https://docs.armoriq.ai/armorcopilot
+- ArmorIQ platform: https://armoriq.ai
 - GitHub Copilot CLI plugin docs: https://docs.github.com/copilot/concepts/agents/copilot-cli/about-cli-plugins
 - GitHub Copilot CLI hooks reference: https://docs.github.com/en/copilot/reference/hooks-configuration
-- ArmorIQ platform: https://armoriq.ai
