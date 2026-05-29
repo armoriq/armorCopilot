@@ -23,7 +23,6 @@ set -euo pipefail
 #
 # Flags:
 #   --uninstall   remove the plugin + marketplace registration
-#   --skip-login  don't prompt for ArmorIQ login at the end
 #
 # Non-interactive overrides:
 #   ARMORCOPILOT_MARKETPLACE_REPO   override marketplace source (testing)
@@ -70,11 +69,9 @@ PLUGIN_PATH="${PLUGIN_ROOT}/${PLUGIN_SUBDIR}"
 BOOTSTRAP_PATH="${PLUGIN_PATH}/scripts/bootstrap.mjs"
 
 DO_UNINSTALL=0
-SKIP_LOGIN=0
 for arg in "$@"; do
   case "$arg" in
     --uninstall)  DO_UNINSTALL=1 ;;
-    --skip-login) SKIP_LOGIN=1 ;;
     -h|--help)
       sed -n '4,32p' "${SCRIPT_PATH:-$0}" 2>/dev/null || true
       exit 0
@@ -258,58 +255,78 @@ verify_install() {
   fi
 }
 
-connect_to_armoriq() {
-  [[ "${SKIP_LOGIN}" -eq 1 ]] && return 0
+abort_install() {
+  echo
+  warn "Rolling back ArmorCopilot install..."
+  copilot plugin uninstall "${PLUGIN_NAME}" >/dev/null 2>&1 || true
+  copilot plugin marketplace remove "${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
+  if [[ -d "${INSTALL_HOME}" ]]; then
+    rm -rf "${INSTALL_HOME}"
+  fi
+  echo
+  err "ArmorCopilot requires an ArmorIQ account. Install aborted."
+  printf "  Re-run when ready: ${B}curl -fsSL https://armoriq.ai/install_armorcopilot.sh | bash${N}\n\n"
+  exit 1
+}
 
+connect_to_armoriq() {
   section "Connect to ArmorIQ"
   cat <<EOF
 
-  Unlocks: signed JWT intent tokens, audit logs, CSRG proofs,
-  and dashboard visibility for all intent plans at ${C}${DASHBOARD_URL}${N}.
+  ArmorCopilot requires an ArmorIQ account. Connecting unlocks signed JWT
+  intent tokens, audit logs, CSRG proofs, and dashboard visibility for all
+  intent plans at ${C}${DASHBOARD_URL}${N}.
 
 EOF
 
-  if ! is_promptable; then
-    printf "  Run ${G}${B}armoriq-dev login --product armorcopilot${N} to connect later.\n\n"
+  if [[ -n "${ARMORIQ_API_KEY:-}" ]] || [[ -f "$HOME/.armoriq/credentials.json" ]]; then
+    ok "ArmorIQ credentials already present"
     return 0
   fi
 
+  if ! is_promptable; then
+    err "No TTY available for interactive login."
+    printf "  Set ${B}ARMORIQ_API_KEY${N} or run interactively.\n"
+    abort_install
+  fi
+
   if ! prompt_yes_no "Connect your ArmorIQ account now?" "Y"; then
-    echo
-    printf "  No problem. Run ${G}${B}armoriq-dev login --product armorcopilot${N} anytime.\n\n"
-    return 0
+    abort_install
   fi
 
   echo
   local product="armorcopilot"
+  local login_ok=0
   if command -v armoriq-dev >/dev/null 2>&1; then
     if armoriq-dev login --help 2>&1 | grep -q -- '--product'; then
-      armoriq-dev login --product "${product}"
+      armoriq-dev login --product "${product}" && login_ok=1 || login_ok=0
     else
-      ARMORIQ_PRODUCT="${product}" armoriq-dev login
+      ARMORIQ_PRODUCT="${product}" armoriq-dev login && login_ok=1 || login_ok=0
     fi
   elif command -v armoriq >/dev/null 2>&1; then
     if armoriq login --help 2>&1 | grep -q -- '--product'; then
-      armoriq login --product "${product}"
+      armoriq login --product "${product}" && login_ok=1 || login_ok=0
     else
-      ARMORIQ_PRODUCT="${product}" armoriq login
+      ARMORIQ_PRODUCT="${product}" armoriq login && login_ok=1 || login_ok=0
     fi
   elif command -v npx >/dev/null 2>&1; then
     if npx @armoriq/sdk-dev login --help 2>&1 | grep -q -- '--product'; then
-      npx @armoriq/sdk-dev login --product "${product}"
+      npx @armoriq/sdk-dev login --product "${product}" && login_ok=1 || login_ok=0
     else
-      ARMORIQ_PRODUCT="${product}" npx @armoriq/sdk-dev login
+      ARMORIQ_PRODUCT="${product}" npx @armoriq/sdk-dev login && login_ok=1 || login_ok=0
     fi
   else
-    warn "armoriq CLI not found. Run ${B}npx @armoriq/sdk-dev login${N} manually."
-    return 0
+    err "armoriq CLI not found. ArmorCopilot requires it for login."
+    abort_install
   fi
 
-  local login_status=$?
-  if [[ $login_status -eq 0 ]] && [[ -f "$HOME/.armoriq/credentials.json" ]]; then
-    echo
-    ok "ArmorIQ connected. Copilot will auto-load the key."
+  if [[ "${login_ok}" -ne 1 ]] || [[ ! -f "$HOME/.armoriq/credentials.json" ]]; then
+    err "ArmorIQ login did not complete."
+    abort_install
   fi
+
+  echo
+  ok "ArmorIQ connected. Copilot will auto-load the key."
 }
 
 finale() {
