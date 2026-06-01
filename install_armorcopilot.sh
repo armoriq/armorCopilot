@@ -16,7 +16,7 @@ set -euo pipefail
 #   3. installs @armoriq/sdk-dev globally (for the `armoriq-dev` CLI)
 #   4. registers the marketplace + installs the plugin in Copilot CLI:
 #         copilot plugin marketplace add armoriq/armorCopilot
-#         copilot plugin install armorcopilot@armorcopilot
+#         copilot plugin install armorcopilot@armoriq
 #   5. runs `armoriq-dev login --product armorcopilot` for device-code auth
 #
 # Re-runs auto-detect mode: if the plugin and credentials are already in
@@ -44,7 +44,7 @@ D=$'\033[0;90m'
 N=$'\033[0m'
 
 MARKETPLACE_REPO="${ARMORCOPILOT_MARKETPLACE_REPO:-armoriq/armorCopilot}"
-MARKETPLACE_NAME="armorcopilot"
+MARKETPLACE_NAME="armoriq"
 PLUGIN_NAME="armorcopilot"
 PLUGIN_GIT_URL="${ARMORCOPILOT_GIT_URL:-https://github.com/armoriq/armorCopilot.git}"
 PLUGIN_GIT_REF="${ARMORCOPILOT_GIT_REF:-main}"
