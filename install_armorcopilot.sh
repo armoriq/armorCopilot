@@ -16,13 +16,17 @@ set -euo pipefail
 #   3. installs @armoriq/sdk-dev globally (for the `armoriq-dev` CLI)
 #   4. registers the marketplace + installs the plugin in Copilot CLI:
 #         copilot plugin marketplace add armoriq/armorCopilot
-#         copilot plugin install armorcopilot@armorcopilot
+#         copilot plugin install armorcopilot@armoriq
 #   5. runs `armoriq-dev login --product armorcopilot` for device-code auth
 #
-# Idempotent: re-running pulls the latest, reinstalls deps, refreshes marketplace.
+# Re-runs auto-detect mode: if the plugin and credentials are already in
+# place the script runs in update mode (refresh checkout + SDK + npm deps,
+# skip the login prompt). Fresh installs go through the full flow.
 #
 # Flags:
-#   --uninstall   remove the plugin + marketplace registration
+#   --uninstall       remove the plugin + marketplace registration
+#   --force-install   force the full install flow even if already installed
+#   --update          force update mode even without credentials
 #
 # Non-interactive overrides:
 #   ARMORCOPILOT_MARKETPLACE_REPO   override marketplace source (testing)
@@ -40,7 +44,7 @@ D=$'\033[0;90m'
 N=$'\033[0m'
 
 MARKETPLACE_REPO="${ARMORCOPILOT_MARKETPLACE_REPO:-armoriq/armorCopilot}"
-MARKETPLACE_NAME="armorcopilot"
+MARKETPLACE_NAME="armoriq"
 PLUGIN_NAME="armorcopilot"
 PLUGIN_GIT_URL="${ARMORCOPILOT_GIT_URL:-https://github.com/armoriq/armorCopilot.git}"
 PLUGIN_GIT_REF="${ARMORCOPILOT_GIT_REF:-main}"
@@ -69,9 +73,12 @@ PLUGIN_PATH="${PLUGIN_ROOT}/${PLUGIN_SUBDIR}"
 BOOTSTRAP_PATH="${PLUGIN_PATH}/scripts/bootstrap.mjs"
 
 DO_UNINSTALL=0
+FORCE_MODE=""
 for arg in "$@"; do
   case "$arg" in
-    --uninstall)  DO_UNINSTALL=1 ;;
+    --uninstall)      DO_UNINSTALL=1 ;;
+    --force-install)  FORCE_MODE="install" ;;
+    --update)         FORCE_MODE="update" ;;
     -h|--help)
       sed -n '4,32p' "${SCRIPT_PATH:-$0}" 2>/dev/null || true
       exit 0
@@ -372,6 +379,57 @@ EOF
 EOF
 }
 
+# ---------------------------------------------------------------------------
+# Install mode detection
+# ---------------------------------------------------------------------------
+
+is_armorcopilot_installed() {
+  [[ -f "${BOOTSTRAP_PATH}" ]] && copilot plugin list 2>/dev/null | grep -q "^[^#]*${PLUGIN_NAME}"
+}
+
+detect_mode() {
+  if [[ -n "${FORCE_MODE}" ]]; then
+    printf '%s' "${FORCE_MODE}"
+    return 0
+  fi
+  if [[ -f "${HOME}/.armoriq/credentials.json" ]] && is_armorcopilot_installed; then
+    printf 'update'
+  else
+    printf 'install'
+  fi
+}
+
+run_update_path() {
+  section "Refreshing plugin source"
+  fetch_plugin_source
+
+  section "Refreshing dependencies"
+  pushd "${PLUGIN_PATH}" >/dev/null
+  info "running npm install (--omit=dev) to pick up latest deps"
+  npm install --omit=dev --silent --no-audit --no-fund >/dev/null \
+    && ok "npm dependencies refreshed" \
+    || warn "npm install failed, re-run manually if needed"
+  popd >/dev/null
+  install_armoriq_cli
+}
+
+finish_update_banner() {
+  local sha=""
+  if [[ -d "${INSTALL_HOME}/.git" ]]; then
+    sha="$(git -C "${INSTALL_HOME}" rev-parse --short HEAD 2>/dev/null || true)"
+  fi
+  echo
+  printf "${G}${B}ArmorCopilot is up to date.${N}\n\n"
+  if [[ -n "${sha}" ]]; then
+    info "Plugin: ${INSTALL_HOME} (refreshed to ${sha})"
+  else
+    info "Plugin: ${INSTALL_HOME} (refreshed)"
+  fi
+  info "SDK:    @armoriq/sdk-dev (latest)"
+  echo
+  printf "  Docs: ${C}${B}https://docs.armoriq.ai/armorcopilot${N}\n\n"
+}
+
 uninstall() {
   section "Uninstalling ArmorCopilot"
   if copilot plugin uninstall "${PLUGIN_NAME}" >/dev/null 2>&1; then
@@ -402,6 +460,16 @@ main() {
   require_cmd git
   check_node_version
   ok "prerequisites OK ($(copilot --version 2>/dev/null | head -1), $(node --version))"
+
+  local mode
+  mode="$(detect_mode)"
+  if [[ "${mode}" == "update" ]]; then
+    section "Updating ArmorCopilot"
+    run_update_path
+    verify_install
+    finish_update_banner
+    exit 0
+  fi
 
   section "Fetching plugin source"
   fetch_plugin_source
