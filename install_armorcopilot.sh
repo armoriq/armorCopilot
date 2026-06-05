@@ -304,24 +304,18 @@ EOF
   echo
   local product="armorcopilot"
   local login_ok=0
+  # Always pass --product. Older SDKs without --product support just ignore
+  # unknown flags. Also export ARMORIQ_PRODUCT as a belt-and-braces fallback.
+  # Do NOT probe with `login --help` first — the SDK's `login` subcommand
+  # treats --help as an unknown flag and runs the full device-code flow,
+  # which would open the browser an extra time.
+  export ARMORIQ_PRODUCT="${product}"
   if command -v armoriq-dev >/dev/null 2>&1; then
-    if armoriq-dev login --help 2>&1 | grep -q -- '--product'; then
-      armoriq-dev login --product "${product}" && login_ok=1 || login_ok=0
-    else
-      ARMORIQ_PRODUCT="${product}" armoriq-dev login && login_ok=1 || login_ok=0
-    fi
+    armoriq-dev login --product "${product}" && login_ok=1 || login_ok=0
   elif command -v armoriq >/dev/null 2>&1; then
-    if armoriq login --help 2>&1 | grep -q -- '--product'; then
-      armoriq login --product "${product}" && login_ok=1 || login_ok=0
-    else
-      ARMORIQ_PRODUCT="${product}" armoriq login && login_ok=1 || login_ok=0
-    fi
+    armoriq login --product "${product}" && login_ok=1 || login_ok=0
   elif command -v npx >/dev/null 2>&1; then
-    if npx @armoriq/sdk-dev login --help 2>&1 | grep -q -- '--product'; then
-      npx @armoriq/sdk-dev login --product "${product}" && login_ok=1 || login_ok=0
-    else
-      ARMORIQ_PRODUCT="${product}" npx @armoriq/sdk-dev login && login_ok=1 || login_ok=0
-    fi
+    npx @armoriq/sdk-dev login --product "${product}" && login_ok=1 || login_ok=0
   else
     err "armoriq CLI not found. ArmorCopilot requires it for login."
     abort_install
