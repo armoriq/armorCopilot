@@ -13,11 +13,11 @@ set -euo pipefail
 # What it wires:
 #   1. clones the plugin to ~/.armoriq/armorCopilot
 #   2. npm install --omit=dev for plugin runtime deps
-#   3. installs @armoriq/sdk-dev globally (for the `armoriq-dev` CLI)
+#   3. installs @armoriq/sdk globally (for the `armoriq` CLI)
 #   4. registers the marketplace + installs the plugin in Copilot CLI:
 #         copilot plugin marketplace add armoriq/armorCopilot
 #         copilot plugin install armorcopilot@armoriq
-#   5. runs `armoriq-dev login --product armorcopilot` for device-code auth
+#   5. runs `armoriq login --product armorcopilot` for device-code auth
 #
 # Re-runs auto-detect mode: if the plugin and credentials are already in
 # place the script runs in update mode (refresh checkout + SDK + npm deps,
@@ -49,7 +49,7 @@ PLUGIN_NAME="armorcopilot"
 PLUGIN_GIT_URL="${ARMORCOPILOT_GIT_URL:-https://github.com/armoriq/armorCopilot.git}"
 PLUGIN_GIT_REF="${ARMORCOPILOT_GIT_REF:-main}"
 INSTALL_HOME="${ARMORCOPILOT_INSTALL_HOME:-${HOME}/.armoriq/armorCopilot}"
-DASHBOARD_URL="https://dev.armoriq.ai"
+DASHBOARD_URL="https://platform.armoriq.ai"
 
 # Recover if the caller is running this from a deleted directory (common when
 # piping curl into bash from /tmp).
@@ -193,8 +193,8 @@ fetch_plugin_source() {
 
 install_npm_deps() {
   pushd "${PLUGIN_PATH}" >/dev/null
-  if [[ -d node_modules/@armoriq/sdk-dev && -d node_modules/zod && -d node_modules/@modelcontextprotocol/sdk ]] \
-    || [[ -d node_modules/@armoriq/sdk && -d node_modules/zod && -d node_modules/@modelcontextprotocol/sdk ]]; then
+  if [[ -d node_modules/@armoriq/sdk && -d node_modules/zod && -d node_modules/@modelcontextprotocol/sdk ]] \
+    || [[ -d node_modules/@armoriq/sdk-dev && -d node_modules/zod && -d node_modules/@modelcontextprotocol/sdk ]]; then
     info "npm dependencies already present"
   else
     info "installing npm dependencies (--omit=dev)"
@@ -205,11 +205,11 @@ install_npm_deps() {
 }
 
 install_armoriq_cli() {
-  info "installing ArmorIQ CLI ${B}(@armoriq/sdk-dev)${N}"
-  if npm install -g @armoriq/sdk-dev@latest --silent --no-audit --no-fund >/dev/null 2>&1; then
-    ok "armoriq-dev CLI ready"
+  info "installing ArmorIQ CLI ${B}(@armoriq/sdk)${N}"
+  if npm install -g @armoriq/sdk@latest --silent --no-audit --no-fund >/dev/null 2>&1; then
+    ok "armoriq CLI ready"
   else
-    warn "couldn't install globally, use ${B}npx @armoriq/sdk-dev${N} instead"
+    warn "couldn't install globally, use ${B}npx @armoriq/sdk${N} instead"
   fi
 }
 
@@ -304,24 +304,19 @@ EOF
   echo
   local product="armorcopilot"
   local login_ok=0
-  if command -v armoriq-dev >/dev/null 2>&1; then
-    if armoriq-dev login --help 2>&1 | grep -q -- '--product'; then
-      armoriq-dev login --product "${product}" && login_ok=1 || login_ok=0
-    else
-      ARMORIQ_PRODUCT="${product}" armoriq-dev login && login_ok=1 || login_ok=0
-    fi
-  elif command -v armoriq >/dev/null 2>&1; then
-    if armoriq login --help 2>&1 | grep -q -- '--product'; then
-      armoriq login --product "${product}" && login_ok=1 || login_ok=0
-    else
-      ARMORIQ_PRODUCT="${product}" armoriq login && login_ok=1 || login_ok=0
-    fi
+  # Always pass --product as a flag AND export ARMORIQ_PRODUCT as a
+  # belt-and-braces fallback. Do NOT probe with `login --help` first —
+  # the SDK's `login` subcommand treats --help as an unknown flag and
+  # runs the full device-code flow, which would open the browser an
+  # extra time. Prefer the prod `armoriq` CLI; fall back to `armoriq-dev`
+  # for users still on the dev SDK; final fallback is npx @armoriq/sdk.
+  export ARMORIQ_PRODUCT="${product}"
+  if command -v armoriq >/dev/null 2>&1; then
+    armoriq login --product "${product}" && login_ok=1 || login_ok=0
+  elif command -v armoriq-dev >/dev/null 2>&1; then
+    armoriq-dev login --product "${product}" && login_ok=1 || login_ok=0
   elif command -v npx >/dev/null 2>&1; then
-    if npx @armoriq/sdk-dev login --help 2>&1 | grep -q -- '--product'; then
-      npx @armoriq/sdk-dev login --product "${product}" && login_ok=1 || login_ok=0
-    else
-      ARMORIQ_PRODUCT="${product}" npx @armoriq/sdk-dev login && login_ok=1 || login_ok=0
-    fi
+    npx @armoriq/sdk login --product "${product}" && login_ok=1 || login_ok=0
   else
     err "armoriq CLI not found. ArmorCopilot requires it for login."
     abort_install
@@ -425,7 +420,7 @@ finish_update_banner() {
   else
     info "Plugin: ${INSTALL_HOME} (refreshed)"
   fi
-  info "SDK:    @armoriq/sdk-dev (latest)"
+  info "SDK:    @armoriq/sdk (latest)"
   echo
   printf "  Docs: ${C}${B}https://docs.armoriq.ai/armorcopilot${N}\n\n"
 }
