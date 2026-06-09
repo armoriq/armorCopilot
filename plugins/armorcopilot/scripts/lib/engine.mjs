@@ -257,22 +257,22 @@ export async function handlePreToolUse(input, config) {
     return null;
   }
 
-  // --- Whitelist: Copilot introspection / coordination tools that have
-  //     no side effects on user files or systems. Blocking these makes the
-  //     agent fight itself (e.g. ToolSearch is needed to fetch deferred MCP
-  //     tool schemas before they can be called). ---
-  // Read-only / coordination tools that bypass full enforcement to keep the
-  // hot path fast. Strictly local-only — anything that performs network
-  // egress (websearch, webfetch) MUST go through policy + intent enforcement
-  // and cannot be on this list.
+  // --- Whitelist: MCP coordination internals only. ---
+  // These are tools the agent needs to call BEFORE it can do anything else
+  // (e.g. ToolSearch fetches deferred MCP tool schemas; ListMcpResourcesTool
+  // is required for the agent to discover what MCP servers expose).
+  // Bypassing them is necessary to avoid deadlocks where the plugin can't
+  // even read its own MCP tool list.
+  //
+  // Previously included read/grep/glob on the reasoning "they don't mutate
+  // state". That was a security hole — `cat ~/.ssh/id_rsa` is a read but
+  // it absolutely needs policy enforcement. They are now subject to the
+  // full IAP + intent-plan + policy pipeline like every other tool.
   const safeInternalTools = new Set([
     "toolsearch",
     "todowrite",
     "listmcpresourcestool",
-    "readmcpresourcetool",
-    "read",
-    "grep",
-    "glob"
+    "readmcpresourcetool"
   ]);
   if (safeInternalTools.has(norm)) {
     return null;
