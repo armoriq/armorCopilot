@@ -308,17 +308,23 @@ EOF
   # belt-and-braces fallback. Do NOT probe with `login --help` first —
   # the SDK's `login` subcommand treats --help as an unknown flag and
   # runs the full device-code flow, which would open the browser an
-  # extra time. Prefer the prod `armoriq` CLI; fall back to `armoriq-dev`
-  # for users still on the dev SDK; final fallback is npx @armoriq/sdk.
+  # extra time.
+  #
+  # Invocation strategy: route through `npx -p @armoriq/sdk armoriq`
+  # so we always run the just-installed npm package, NOT whatever
+  # `armoriq` happens to resolve to on PATH (some users have a Python
+  # `armoriq` from PyPI in a conda env that wins the PATH lookup and
+  # ships its own older unbranded callback page). npx with -p pins to
+  # the exact package we want.
   export ARMORIQ_PRODUCT="${product}"
-  if command -v armoriq >/dev/null 2>&1; then
-    armoriq login --product "${product}" && login_ok=1 || login_ok=0
+  if command -v npx >/dev/null 2>&1; then
+    npx -p @armoriq/sdk armoriq login --product "${product}" \
+      && login_ok=1 || login_ok=0
   elif command -v armoriq-dev >/dev/null 2>&1; then
+    # Legacy fallback for users still on @armoriq/sdk-dev (pre-prod-flip).
     armoriq-dev login --product "${product}" && login_ok=1 || login_ok=0
-  elif command -v npx >/dev/null 2>&1; then
-    npx @armoriq/sdk login --product "${product}" && login_ok=1 || login_ok=0
   else
-    err "armoriq CLI not found. ArmorCopilot requires it for login."
+    err "Neither npx nor armoriq-dev found. ArmorCopilot requires npm/npx for login."
     abort_install
   fi
 
