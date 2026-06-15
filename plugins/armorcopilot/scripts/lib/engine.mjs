@@ -155,12 +155,27 @@ export async function handleSessionStart(input, config) {
 
   debugLog(config, `session started: ${sessionId}, mode=${config.mode}`);
 
+  // SessionStart's additionalContext is officially honored by the Copilot CLI
+  // planner per the changelog ("sessionStart hook additionalContext is now
+  // injected into the conversation"). We inject the full directive here so it
+  // applies for every prompt in the session, including pure built-in-tool
+  // prompts that never touch the plugin's MCP tools — which the
+  // userPromptSubmitted equivalent stopped honoring as of v1.0.60.
   const modeLabel = config.mode === "enforce" ? "ENFORCING" : "MONITORING";
   const intentLabel = config.intentRequired ? "required" : "optional";
-  return addPromptContext(
-    `ArmorCopilot active (${modeLabel}, intent=${intentLabel})`,
-    "SessionStart"
-  );
+  const parts = [`ArmorCopilot active (${modeLabel}, intent=${intentLabel}).`];
+  if (config.planningEnabled) {
+    parts.push(
+      "Before EVERY tool call (built-in or MCP), call `register_intent_plan` first. " +
+      "Each `step.action` = tool name (e.g. `Read`, `Bash`, `Edit`, `web_fetch`). " +
+      "`metadata.inputs` = `{}` matches by tool name only. " +
+      "ArmorCopilot will block any tool not declared in the registered plan."
+    );
+  }
+  if (config.contextHintsEnabled && config.policyUpdateEnabled) {
+    parts.push(buildPolicyContextHints());
+  }
+  return addPromptContext(parts.join("\n\n"), "SessionStart");
 }
 
 // ---------------------------------------------------------------------------
@@ -200,22 +215,13 @@ export async function handleUserPromptSubmit(input, config) {
   });
   await saveRuntimeState(config.runtimeFile, runtimeState);
 
-  // --- Inject directive: tell Copilot to register its intent plan ---
-  // Copilot will call the `register_intent_plan` MCP tool as its first action.
-  // The MCP tool's inputSchema already describes the JSON shape, so we don't
-  // duplicate it here — keeps the visible prompt context short.
-  const parts = [];
-  if (config.planningEnabled) {
-    parts.push(
-      "ArmorCopilot active. Call `register_intent_plan` first; step `action` = tool name, `metadata.inputs` = `{}` matches by name only."
-    );
-  }
-  if (config.contextHintsEnabled && config.policyUpdateEnabled) {
-    parts.push(buildPolicyContextHints());
-  }
-  if (parts.length > 0) {
-    return addPromptContext(parts.join("\n\n"));
-  }
+  // Directive injection (the "register_intent_plan first" hint + policy
+  // context hints) moved to handleSessionStart. Copilot CLI v1.0.60+ stopped
+  // honoring `additionalContext` from `userPromptSubmitted` for prompts that
+  // only use built-in tools (filed as github/copilot-cli#3727). sessionStart's
+  // additionalContext IS officially honored per the upstream changelog, and
+  // becomes a persistent system-level context for every prompt in the
+  // session — which is actually a better fit for the directive.
   return null;
 }
 
