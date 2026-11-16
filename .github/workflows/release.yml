@@ -46,7 +46,6 @@ jobs:
           version=$(node scripts/check-version.mjs)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           released=false
-          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then released=true; fi
           if gh release view "v$version" >/dev/null 2>&1; then released=true; fi
           echo "released=$released" >> "$GITHUB_OUTPUT"
           if [ "$released" = true ]; then
@@ -87,15 +86,20 @@ jobs:
         working-directory: plugins/armorcopilot
         run: node --test
 
-      # The tag is immutable: created once, never moved, and the plan job refuses to re-release
-      # a version whose tag already exists.
+      # The tag is immutable: created once and never moved. A tag left by a failed run is reused
+      # only when it already points at this commit, so the run can be retried.
       - name: Tag the released commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
-            echo "tag v$VERSION already exists; refusing to move it"
-            exit 1
+            tagged=$(git rev-parse "v$VERSION^{commit}")
+            if [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "tag v$VERSION points at $tagged, not $GITHUB_SHA; refusing to move it"
+              exit 1
+            fi
+            echo "tag v$VERSION already points at this commit; reusing it"
+            exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -105,4 +109,8 @@ jobs:
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v$VERSION" --title "v$VERSION" --verify-tag --generate-notes
+        # A prerelease must not become releases/latest, which every installed copy follows.
+        run: |
+          prerelease=()
+          case "$VERSION" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "v$VERSION" "${prerelease[@]}" --title "v$VERSION" --verify-tag --generate-notes
