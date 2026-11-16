@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Check the version copies agree
+        run: node scripts/check-version.mjs
+
+      - name: Install dependencies
+        working-directory: plugins/armorcopilot
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: Test
+        working-directory: plugins/armorcopilot
+        run: node --test

@@ -14,6 +14,14 @@ copilot plugin install armoriq/armorCopilot
 
 The plugin runtime auto-discovers `.claude-plugin/plugin.json` inside `plugins/armorcopilot/` and registers hooks + MCP servers.
 
+## Updates
+
+An install made by `curl -fsSL https://armoriq.ai/install_armorcopilot.sh | bash` is a git checkout at `~/.armoriq/armorCopilot`, and it updates itself. At most once a day a session start checks the latest GitHub release in the background. A newer release is cloned beside the checkout, its dependencies are installed, and it replaces the checkout at the next session start. The replaced tree stays at `~/.armoriq/armorCopilot.previous`. A checkout with local edits is never replaced.
+
+Set `ARMORCOPILOT_NO_AUTO_UPDATE=1` to turn this off. A copy installed with `copilot plugin install` is not a checkout and is left alone: update it with `copilot plugin update`.
+
+A release is cut by changing the version on `main`. `node scripts/check-version.mjs` fails unless every copy of the version agrees, and `.github/workflows/release.yml` tags and releases each new version.
+
 ## Configure
 
 After install, paste your ArmorIQ API key into the plugin's userConfig in Copilot CLI. Get one at https://armoriq.ai.
