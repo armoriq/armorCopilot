@@ -1,7 +1,7 @@
 import { after, before, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -112,6 +112,14 @@ describe("compareVersions", () => {
     assert.equal(compareVersions("1.0.0-rc.1", "1.0.0"), -1);
     assert.equal(compareVersions("latest", "0.1.0"), null);
   });
+
+  test("orders prerelease identifiers by SemVer precedence, not as strings", () => {
+    assert.equal(compareVersions("v1.0.0-beta.10", "1.0.0-beta.2"), 1);
+    assert.equal(compareVersions("1.0.0-beta.2", "1.0.0-beta.10"), -1);
+    assert.equal(compareVersions("1.0.0-alpha", "1.0.0-alpha.1"), -1);
+    assert.equal(compareVersions("1.0.0-alpha.1", "1.0.0-alpha.beta"), -1);
+    assert.equal(compareVersions("1.0.0-rc.1", "1.0.0-beta.11"), 1);
+  });
 });
 
 describe("resolveLayout", () => {
@@ -160,6 +168,44 @@ describe("stage then swap", () => {
     assert.equal(outcome.kind, "failed");
     assert.equal(existsSync(layout.staged), false);
     assert.deepEqual(applyStagedUpdate({ pluginRoot, env }), { kind: "skipped", reason: "nothing_staged" });
+  });
+});
+
+describe("swap lock", () => {
+  test("skips the swap while another session holds the lock", async () => {
+    await runUpdate({ pluginRoot, env });
+    writeFileSync(`${layout.root}.update.lock`, "1");
+    assert.deepEqual(applyStagedUpdate({ pluginRoot, env }), { kind: "skipped", reason: "locked" });
+    assert.equal(treeVersion(layout.root), "0.1.0");
+    assert.equal(verifyStaged(layout).ok, true, "the staged release waits for the next session");
+  });
+
+  test("takes over a lock left by a session that died", async () => {
+    await runUpdate({ pluginRoot, env });
+    const lock = `${layout.root}.update.lock`;
+    writeFileSync(lock, "1");
+    const old = new Date(Date.now() - 5 * 60_000);
+    utimesSync(lock, old, old);
+    assert.equal(applyStagedUpdate({ pluginRoot, env }).kind, "swapped");
+    assert.equal(existsSync(lock), false);
+  });
+
+  test("concurrent sessions swap once and keep the install and its backup", async () => {
+    await runUpdate({ pluginRoot, env });
+    const script = `import { applyStagedUpdate } from ${JSON.stringify(new URL("../scripts/lib/update.mjs", import.meta.url).href)};
+process.stdout.write(applyStagedUpdate({ pluginRoot: ${JSON.stringify(pluginRoot)}, env: {} }).kind);`;
+    const runs = Array.from({ length: 8 }, () =>
+      new Promise((resolve) => {
+        const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "ignore"] });
+        let out = "";
+        child.stdout.on("data", (d) => (out += d));
+        child.on("close", () => resolve(out));
+      })
+    );
+    const kinds = await Promise.all(runs);
+    assert.equal(kinds.filter((k) => k === "swapped").length, 1, kinds.join(","));
+    assert.equal(treeVersion(layout.root), "0.1.1");
+    assert.equal(treeVersion(layout.previous), "0.1.0");
   });
 });
 

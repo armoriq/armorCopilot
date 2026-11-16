@@ -5,8 +5,10 @@
 import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -35,6 +37,8 @@ const CHECK_TIMEOUT_MS = 5_000;
 const CLONE_TIMEOUT_MS = 120_000;
 const INSTALL_TIMEOUT_MS = 600_000;
 const STALE_STAGING_MS = 6 * 60 * 60 * 1000;
+// Longer than any swap or staged-tree commit takes, so only a lock whose holder died is this old.
+const STALE_LOCK_MS = 60_000;
 const WORKER = fileURLToPath(new URL("../update-worker.mjs", import.meta.url));
 
 const execFileAsync = promisify(execFile);
@@ -57,6 +61,7 @@ export function resolveLayout(pluginRoot) {
       staged: `${root}.staged`,
       previous: `${root}.previous`,
       marker: `${root}.staged.json`,
+      lock: `${root}.update.lock`,
       state: `${root}.update-check.json`
     };
   } catch {
@@ -82,7 +87,45 @@ export function compareVersions(a, b) {
   if (left.prerelease === right.prerelease) return 0;
   if (!left.prerelease) return 1;
   if (!right.prerelease) return -1;
-  return left.prerelease < right.prerelease ? -1 : 1;
+  return comparePrerelease(left.prerelease.split("."), right.prerelease.split("."));
+}
+
+// SemVer precedence: numeric identifiers compare as numbers and sort below alphanumeric ones.
+function comparePrerelease(a, b) {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] === b[i]) continue;
+    const an = /^\d+$/.test(a[i]);
+    const bn = /^\d+$/.test(b[i]);
+    if (an && bn) return Number(a[i]) < Number(b[i]) ? -1 : 1;
+    if (an !== bn) return an ? -1 : 1;
+    return a[i] < b[i] ? -1 : 1;
+  }
+  return a.length === b.length ? 0 : a.length < b.length ? -1 : 1;
+}
+
+/**
+ * Exclusive-create lock shared by the swap and the staged-tree commit, which both move
+ * `${root}.staged`. Sessions that start together would otherwise interleave their renames and can
+ * leave no tree at the install path. Returns a release function, or null when another holds it.
+ */
+function acquireLock(layout, now = Date.now()) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = openSync(layout.lock, "wx", 0o600);
+      writeFileSync(fd, String(process.pid));
+      closeSync(fd);
+      return () => rmSync(layout.lock, { force: true });
+    } catch (error) {
+      if (error?.code !== "EEXIST") return null;
+      try {
+        if (now - statSync(layout.lock).mtimeMs < STALE_LOCK_MS) return null;
+        rmSync(layout.lock, { force: true });
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export function treeVersion(root) {
@@ -153,31 +196,43 @@ export function applyStagedUpdate({ pluginRoot, env = process.env }) {
     const layout = resolveLayout(pluginRoot);
     if (!layout) return { kind: "skipped", reason: "not_a_checkout" };
     if (!existsSync(layout.staged)) return { kind: "skipped", reason: "nothing_staged" };
-    const staged = verifyStaged(layout);
-    if (!staged.ok) return { kind: "refused", reason: staged.reason };
-    const installed = treeVersion(layout.root);
-    if (installed === null) return { kind: "refused", reason: "the installed checkout has no readable version" };
-    const ahead = compareVersions(staged.version, installed);
-    if (ahead === null || ahead <= 0)
-      return { kind: "refused", reason: `staged ${staged.version} is not newer than the installed ${installed}` };
-    const changes = localChanges(layout.root);
-    if (changes === null) return { kind: "refused", reason: "the installed checkout is not a readable git checkout" };
-    if (changes !== "") return { kind: "refused", reason: "the installed checkout has local modifications" };
-
-    if (existsSync(layout.previous))
-      renameSync(layout.previous, path.join(layout.parent, `${layout.base}.discard.${randomUUID().slice(0, 8)}`));
-    renameSync(layout.root, layout.previous);
+    const release = acquireLock(layout);
+    if (!release) return { kind: "skipped", reason: "locked" };
     try {
-      renameSync(layout.staged, layout.root);
-    } catch (error) {
-      renameSync(layout.previous, layout.root);
-      throw error;
+      return swapLocked(layout);
+    } finally {
+      release();
     }
-    rmSync(layout.marker, { force: true });
-    return { kind: "swapped", from: installed, to: staged.version };
   } catch (error) {
     return { kind: "failed", reason: String(error) };
   }
+}
+
+// Every check is repeated under the lock: a session that held it may already have swapped.
+function swapLocked(layout) {
+  if (!existsSync(layout.staged)) return { kind: "skipped", reason: "nothing_staged" };
+  const staged = verifyStaged(layout);
+  if (!staged.ok) return { kind: "refused", reason: staged.reason };
+  const installed = treeVersion(layout.root);
+  if (installed === null) return { kind: "refused", reason: "the installed checkout has no readable version" };
+  const ahead = compareVersions(staged.version, installed);
+  if (ahead === null || ahead <= 0)
+    return { kind: "refused", reason: `staged ${staged.version} is not newer than the installed ${installed}` };
+  const changes = localChanges(layout.root);
+  if (changes === null) return { kind: "refused", reason: "the installed checkout is not a readable git checkout" };
+  if (changes !== "") return { kind: "refused", reason: "the installed checkout has local modifications" };
+
+  if (existsSync(layout.previous))
+    renameSync(layout.previous, path.join(layout.parent, `${layout.base}.discard.${randomUUID().slice(0, 8)}`));
+  renameSync(layout.root, layout.previous);
+  try {
+    renameSync(layout.staged, layout.root);
+  } catch (error) {
+    renameSync(layout.previous, layout.root);
+    throw error;
+  }
+  rmSync(layout.marker, { force: true });
+  return { kind: "swapped", from: installed, to: staged.version };
 }
 
 // A timestamp in the future comes from a clock change, and would otherwise suppress every check.
@@ -227,16 +282,32 @@ export async function stageRelease({ layout, tag, env = process.env }) {
     writeFileSync(path.join(pluginDir, "node_modules", DEPS_MARKER), version, "utf8");
     if (!depsInstalled(tmp, version)) throw new Error("dependencies are missing after npm install");
 
-    rmSync(layout.marker, { force: true });
-    rmSync(layout.staged, { recursive: true, force: true });
-    renameSync(tmp, layout.staged);
-    // Written last, so a tree an interrupted staging left behind is never eligible for the swap.
-    writeJson(layout.marker, { version, tag, stagedAt: Date.now() });
+    const release = await waitForLock(layout);
+    if (!release) throw new Error("another session held the update lock");
+    try {
+      rmSync(layout.marker, { force: true });
+      rmSync(layout.staged, { recursive: true, force: true });
+      renameSync(tmp, layout.staged);
+      // Written last, so a tree an interrupted staging left behind is never eligible for the swap.
+      writeJson(layout.marker, { version, tag, stagedAt: Date.now() });
+    } finally {
+      release();
+    }
     return { kind: "staged", version, tag };
   } catch (error) {
     rmSync(tmp, { recursive: true, force: true });
     return { kind: "failed", reason: String(error) };
   }
+}
+
+// The worker is detached, so it can wait out a swap rather than drop a finished staging.
+async function waitForLock(layout) {
+  for (let i = 0; i < 50; i++) {
+    const release = acquireLock(layout);
+    if (release) return release;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return null;
 }
 
 function prune(layout, now) {
