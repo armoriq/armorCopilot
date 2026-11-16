@@ -33,6 +33,19 @@ function installedOk() {
   }
 }
 
+// Before the dependency check: a swapped-in release brings its own node_modules, and every
+// import below resolves by path, so this session already runs the new code.
+if (process.argv[2] === "router" && process.env.COPILOT_HOOK_EVENT === "SessionStart") {
+  try {
+    const { startUpdate, swapNotice } = await import("./lib/update.mjs");
+    const notice = swapNotice(startUpdate({ pluginRoot }).swap);
+    if (notice) {
+      process.env.ARMORCOPILOT_UPDATE_NOTICE = notice;
+      process.stderr.write(`[armorcopilot] ${notice}\n`);
+    }
+  } catch {}
+}
+
 if (!installedOk()) {
   process.stderr.write("[armorcopilot] installing dependencies (one-time)...\n");
   const result = spawnSync("npm", ["install", "--omit=dev", "--silent", "--no-audit", "--no-fund"], {

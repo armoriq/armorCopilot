@@ -157,8 +157,9 @@ export async function handleSessionStart(input, config) {
 
   const modeLabel = config.mode === "enforce" ? "ENFORCING" : "MONITORING";
   const intentLabel = config.intentRequired ? "required" : "optional";
+  const notice = process.env.ARMORCOPILOT_UPDATE_NOTICE;
   return addPromptContext(
-    `ArmorCopilot active (${modeLabel}, intent=${intentLabel})`,
+    `ArmorCopilot active (${modeLabel}, intent=${intentLabel})${notice ? ` ${notice}` : ""}`,
     "SessionStart"
   );
 }
